@@ -1,8 +1,9 @@
-macro(
-  enable_cppcheck
-  target
+# Helper function to configure cppcheck command
+function(
+  _configure_cppcheck_command
   WARNINGS_AS_ERRORS
-  CPPCHECK_OPTIONS)
+  CPPCHECK_OPTIONS
+  OUTPUT_VAR)
   find_program(CPPCHECK cppcheck)
 
   if(CPPCHECK)
@@ -25,17 +26,15 @@ macro(
           # if a file does not have an internalAstError, we get an unmatchedSuppression error
           --suppress=unmatchedSuppression
           # noisy and incorrect sometimes
-          --suppress=passedByValue --suppress=useStlAlgorithm
+          --suppress=passedByValue
           # ignores code that cppcheck thinks is invalid C++
-          --suppress=syntaxError --suppress=preprocessorErrorDirective --inconclusive --suppress=${SUPPRESS_DIR})
+          --suppress=syntaxError --suppress=preprocessorErrorDirective
+          # ignores static_assert type failures
+          --suppress=knownConditionTrueFalse --inconclusive --suppress=${SUPPRESS_DIR})
     else()
       # if the user provides a CPPCHECK_OPTIONS with a template specified, it will override this template
       set(CPPCHECK_COMMAND ${CPPCHECK} --template=${CPPCHECK_TEMPLATE} ${CPPCHECK_OPTIONS})
     endif()
-
-    # if(DEFINED ENV{CPM_SOURCE_CACHE})
-    # set(CPPCHECK_COMMAND ${CPPCHECK_COMMAND} --suppress=*:$ENV{CPM_SOURCE_CACHE}/*)
-    # endif()
 
     if(NOT
        "${CMAKE_CXX_STANDARD}"
@@ -49,20 +48,52 @@ macro(
     endif()
 
     message(STATUS "CPPCHECK_COMMAND: ${CPPCHECK_COMMAND}")
-
-    set_target_properties(${target} PROPERTIES CXX_CPPCHECK "${CPPCHECK_COMMAND}")
+    set(${OUTPUT_VAR}
+        "${CPPCHECK_COMMAND}"
+        PARENT_SCOPE)
+    set(${OUTPUT_VAR}_FOUND
+        TRUE
+        PARENT_SCOPE)
   else()
+    set(${OUTPUT_VAR}_FOUND
+        FALSE
+        PARENT_SCOPE)
     message(${WARNING_MESSAGE} "cppcheck requested but executable not found")
+  endif()
+endfunction()
+
+macro(
+  enable_cppcheck_target
+  target
+  WARNINGS_AS_ERRORS
+  CPPCHECK_OPTIONS)
+  _configure_cppcheck_command(${WARNINGS_AS_ERRORS} "${CPPCHECK_OPTIONS}" CPPCHECK_COMMAND)
+  if(CPPCHECK_COMMAND_FOUND)
+    set_target_properties(${target} PROPERTIES CXX_CPPCHECK "${CPPCHECK_COMMAND}")
   endif()
 endmacro()
 
-macro(enable_clang_tidy target WARNINGS_AS_ERRORS)
+macro(enable_cppcheck_global WARNINGS_AS_ERRORS CPPCHECK_OPTIONS)
+  _configure_cppcheck_command(${WARNINGS_AS_ERRORS} "${CPPCHECK_OPTIONS}" CMAKE_CXX_CPPCHECK)
+endmacro()
+
+# Helper function to configure clang-tidy command
+function(
+  _configure_clang_tidy_command
+  WARNINGS_AS_ERRORS
+  IS_GLOBAL
+  OUTPUT_VAR)
   find_program(CLANGTIDY clang-tidy)
 
   if(CLANGTIDY)
     # construct the clang-tidy command line
     set(CLANG_TIDY_COMMAND ${CLANGTIDY} -extra-arg=-Wno-unknown-warning-option
                            -extra-arg=-Wno-ignored-optimization-argument -extra-arg=-Wno-unused-command-line-argument)
+
+    # add -p flag for global mode
+    if(${IS_GLOBAL})
+      list(APPEND CLANG_TIDY_COMMAND -p)
+    endif()
 
     # set standard
     if(NOT
@@ -81,20 +112,63 @@ macro(enable_clang_tidy target WARNINGS_AS_ERRORS)
       list(APPEND CLANG_TIDY_COMMAND -warnings-as-errors=*)
     endif()
 
-    message(STATUS "CLANG_TIDY_COMMAND: ${CLANG_TIDY_COMMAND}")
+    if(${IS_GLOBAL})
+      message("Also setting clang-tidy globally")
+    else()
+      message(STATUS "CLANG_TIDY_COMMAND: ${CLANG_TIDY_COMMAND}")
+    endif()
 
-    set_target_properties(${target} PROPERTIES CXX_CLANG_TIDY "${CLANG_TIDY_COMMAND}")
+    set(${OUTPUT_VAR}
+        "${CLANG_TIDY_COMMAND}"
+        PARENT_SCOPE)
+    set(${OUTPUT_VAR}_FOUND
+        TRUE
+        PARENT_SCOPE)
   else()
+    set(${OUTPUT_VAR}_FOUND
+        FALSE
+        PARENT_SCOPE)
     message(${WARNING_MESSAGE} "clang-tidy requested but executable not found")
+  endif()
+endfunction()
+
+macro(enable_clang_tidy_target target WARNINGS_AS_ERRORS)
+  _configure_clang_tidy_command(${WARNINGS_AS_ERRORS} FALSE CLANG_TIDY_COMMAND)
+  if(CLANG_TIDY_COMMAND_FOUND)
+    set_target_properties(${target} PROPERTIES CXX_CLANG_TIDY "${CLANG_TIDY_COMMAND}")
   endif()
 endmacro()
 
-macro(enable_include_what_you_use target)
+macro(enable_clang_tidy_global WARNINGS_AS_ERRORS)
+  _configure_clang_tidy_command(${WARNINGS_AS_ERRORS} TRUE CMAKE_CXX_CLANG_TIDY)
+endmacro()
+
+# Helper function to configure include-what-you-use
+function(_configure_include_what_you_use OUTPUT_VAR)
   find_program(INCLUDE_WHAT_YOU_USE include-what-you-use)
 
   if(INCLUDE_WHAT_YOU_USE)
-    set_target_properties(${target} PROPERTIES CXX_INCLUDE_WHAT_YOU_USE ${INCLUDE_WHAT_YOU_USE})
+    set(${OUTPUT_VAR}
+        ${INCLUDE_WHAT_YOU_USE}
+        PARENT_SCOPE)
+    set(${OUTPUT_VAR}_FOUND
+        TRUE
+        PARENT_SCOPE)
   else()
+    set(${OUTPUT_VAR}_FOUND
+        FALSE
+        PARENT_SCOPE)
     message(${WARNING_MESSAGE} "include-what-you-use requested but executable not found")
   endif()
+endfunction()
+
+macro(enable_include_what_you_use_target target)
+  _configure_include_what_you_use(INCLUDE_WHAT_YOU_USE)
+  if(INCLUDE_WHAT_YOU_USE_FOUND)
+    set_target_properties(${target} PROPERTIES CXX_INCLUDE_WHAT_YOU_USE ${INCLUDE_WHAT_YOU_USE})
+  endif()
+endmacro()
+
+macro(enable_include_what_you_use_global)
+  _configure_include_what_you_use(CMAKE_CXX_INCLUDE_WHAT_YOU_USE)
 endmacro()
