@@ -60,11 +60,9 @@ macro(enable_clang_tidy target WARNINGS_AS_ERRORS)
   find_program(CLANGTIDY clang-tidy)
 
   if(CLANGTIDY)
-    message(STATUS "enable_clang_tidy called with target=${target}, WARNINGS_AS_ERRORS='${WARNINGS_AS_ERRORS}'")
     # construct the clang-tidy command line
-    set(CLANG_TIDY_COMMAND
-        ${CLANGTIDY} -extra-arg=-Wno-unknown-warning-option -extra-arg=-Wno-ignored-optimization-argument
-        -extra-arg=-Wno-unused-command-line-argument -p)
+    set(CLANG_TIDY_COMMAND ${CLANGTIDY} -extra-arg=-Wno-unknown-warning-option
+                           -extra-arg=-Wno-ignored-optimization-argument -extra-arg=-Wno-unused-command-line-argument)
 
     # set standard
     if(NOT
